@@ -53,10 +53,14 @@ done
 [[ -n $installed ]] || die "garuda-tools nicht in den Paketquellen gefunden. Verfügbar: $(pacman -Ssq garuda-tools | tr '\n' ' ')"
 echo "Installiert: $installed"
 
-# garuda-tools liest Name, Version und Codename aus /etc/lsb-release.
-# Im Arch-Container fehlt die Datei. Sie betrifft nur den Build-Rechner, nicht das ISO.
+# garuda-tools liest Angaben über den Build-Rechner und nutzt sie im ISO:
+#  - ID aus os-release: Ordnername auf dem ISO, Calamares-Branding, Live-GRUB-Theme.
+#    Muss "garuda" sein, weil die Garuda-Pakete genau diese Namen mitbringen.
+#  - DISTRIB_ID aus lsb-release: Name im Bootmenü und im Installer ("CiviOS Linux").
+# Beides betrifft nur den Build-Container, nicht das installierte System.
+sed -i 's/^ID=.*/ID=garuda/' /usr/lib/os-release
 cat > /etc/lsb-release <<'EOF'
-DISTRIB_ID="Garuda"
+DISTRIB_ID="CiviOS"
 DISTRIB_RELEASE="Rolling"
 DISTRIB_CODENAME="CiviOS"
 DISTRIB_DESCRIPTION="CiviOS Build"
