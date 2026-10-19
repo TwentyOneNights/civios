@@ -48,7 +48,7 @@ Rückgängig machen: `sudo ./install.sh --uninstall`. Überschriebene Dateien we
 
 **Fertiges ISO herunterladen:** Auf GitHub unter **Actions → CiviOS ISO bauen**, den letzten grünen Lauf öffnen und unten bei *Artifacts* `civios-iso` laden. Man muss dafür bei GitHub angemeldet sein. Der Download ist eine ZIP-Datei mit dem ISO (etwa 5 GB). Artefakte werden nach 14 Tagen gelöscht, dann einfach neu bauen.
 
-**Neu bauen:** **Actions → CiviOS ISO bauen → Run workflow**. Dauert etwa eine Stunde. Danach prüft `iso/verify-iso.sh` automatisch, ob alle CiviOS-Dateien, PySide6, die Schriften und der CiviOS-Name im Bootmenü im ISO stecken.
+**Neu bauen:** **Actions → CiviOS ISO bauen → Run workflow**. Dauert etwa eine Stunde. Danach prüft `iso/verify-iso.sh` automatisch, ob alle CiviOS-Dateien, PySide6, die Schriften und das CiviOS-Bootmenü im ISO stecken. Anschliessend startet der Workflow **ISO Boot-Test** das ISO in einer virtuellen Maschine und legt Bildschirmfotos im Branch `bootbilder` ab.
 
 **Auf einen USB-Stick:** mit [Ventoy](https://www.ventoy.net) (ISO einfach auf den Stick kopieren) oder dem KDE ISO Image Writer. Zum ersten Ausprobieren besser in VirtualBox oder GNOME Boxes starten.
 
@@ -110,21 +110,24 @@ civios/
 │           └── civios/apps.list
 ├── iso/
 │   ├── build-iso.sh                 ISO mit garuda-tools bauen
+│   ├── verify-iso.sh                Prüft das fertige ISO
+│   ├── live-overlay/                Nur im Live-System (Bootmenü-Design des ISO)
 │   ├── Packages-CiviOS              Zusätzliche Pakete im ISO
 │   └── Packages-Remove              Garuda-Designpakete, die CiviOS ersetzt
 ├── tools/make-wallpaper.py
 └── .github/workflows/
     ├── check.yml                    Prüft jeden Push
-    └── iso.yml                      Baut das ISO
+    ├── iso.yml                      Baut und prüft das ISO
+    └── boot-test.yml                Startet das ISO in QEMU, macht Bildschirmfotos
 ```
 
 ## Ehrlicher Stand
 
 **Getestet:** `install.sh` (Installieren, erneut Installieren, Entfernen mit Wiederherstellung), alle `civios`-Befehle mit nachgebildeten Garuda-Werkzeugen, `civios compat` gegen die echte Datenbank, Syntax aller Skripte mit shellcheck, Layout-Skript und JSON-Dateien.
 
-**Ebenfalls geprüft:** Der ISO-Build läuft auf GitHub durch (19.10.2026), das CiviOS Center wurde auf allen Seiten gerendert und angeschaut.
+**Ebenfalls geprüft:** Der ISO-Build läuft auf GitHub durch (19.10.2026). Das ISO bootet in QEMU bis in den CiviOS-Desktop mit Leiste, Dock und Hintergrund (siehe Branch `bootbilder`). Das CiviOS Center wurde auf allen Seiten gerendert und angeschaut.
 
-**Noch nicht getestet:** Das ISO auf echter Hardware oder in einer VM booten und installieren, und das Theme in einer echten Plasma-Sitzung. Das geht nur mit Bildschirm, also bitte zuerst in einer VM ausprobieren und Probleme melden.
+**Noch nicht getestet:** Die Installation auf eine Festplatte, echte Hardware (vor allem NVIDIA) und Spiele. Bitte zuerst in einer VM ausprobieren und Probleme melden.
 
 **Bekannte Grenzen:**
 - Secure Boot wird von Garuda nicht offiziell unterstützt.
