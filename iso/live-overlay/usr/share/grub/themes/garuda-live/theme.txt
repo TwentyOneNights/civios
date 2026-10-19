@@ -3,7 +3,6 @@
 title-text: ""
 desktop-image: "background.png"
 desktop-color: "#141415"
-terminal-box: ""
 
 + label {
     top = 18%

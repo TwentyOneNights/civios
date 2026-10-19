@@ -120,6 +120,26 @@ chmod 755 "$DEST"/desktop-overlay/usr/bin/civios*
 mkdir -p "$DEST/live-overlay"
 cp -a "$WORK/iso/live-overlay/." "$DEST/live-overlay/"
 
+# Installer-Starter umbenennen ("Install Garuda Linux" -> "Install CiviOS").
+# Die Originaldatei kommt aus dem Garuda-Paket, nur Name und Beschreibung ändern sich.
+CAL=usr/share/applications/calamares.desktop
+pacman -Fy >/dev/null 2>&1 || true
+OWNER=$(pacman -Fq "$CAL" 2>/dev/null | head -n1 || true)
+if [[ -n $OWNER ]] && pacman -Sw --noconfirm "$OWNER" >/dev/null 2>&1; then
+    PKG=$(find /var/cache/pacman/pkg -name "${OWNER##*/}-[0-9]*.pkg.tar.zst" | sort | tail -n1)
+    mkdir -p "$DEST/live-overlay/usr/share/applications"
+    if [[ -n $PKG ]] && bsdtar -xOf "$PKG" "$CAL" > "$DEST/live-overlay/$CAL" 2>/dev/null; then
+        sed -i -E '/^(Name|GenericName|Comment)(\[[^]]*\])?=/ s/Garuda Linux/CiviOS/g; /^(Name|GenericName|Comment)(\[[^]]*\])?=/ s/Garuda/CiviOS/g' "$DEST/live-overlay/$CAL"
+        echo "Installer-Starter angepasst (aus $OWNER):"
+        grep -E '^(Name|Exec)=' "$DEST/live-overlay/$CAL" || true
+    else
+        rm -f "$DEST/live-overlay/$CAL"
+        echo "Hinweis: calamares.desktop nicht im Paket gefunden, Name bleibt unverändert."
+    fi
+else
+    echo "Hinweis: Besitzer von $CAL nicht ermittelbar, Name bleibt unverändert."
+fi
+
 # Live-Sitzung umbenennen. Spätere Zuweisungen in profile.conf gewinnen.
 cat >> "$DEST/profile.conf" <<'EOF'
 

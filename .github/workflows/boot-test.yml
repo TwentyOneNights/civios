@@ -3,6 +3,9 @@ name: ISO Boot-Test
 # Startet ein fertiges CiviOS-ISO in QEMU, macht Bildschirmfotos und legt sie
 # im Branch "bootbilder" ab. So lässt sich prüfen, ob das Live-System hochfährt.
 on:
+  workflow_run:
+    workflows: ["CiviOS ISO bauen"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       run_id:
@@ -16,6 +19,7 @@ permissions:
 
 jobs:
   boot:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -26,7 +30,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          RID="${{ inputs.run_id }}"
+          RID="${{ inputs.run_id || github.event.workflow_run.id }}"
           if [ -z "$RID" ]; then
             RID=$(gh run list -w iso.yml -s success -L 1 --json databaseId -q '.[0].databaseId')
           fi
