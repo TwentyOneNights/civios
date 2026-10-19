@@ -46,12 +46,19 @@ Rückgängig machen: `sudo ./install.sh --uninstall`. Überschriebene Dateien we
 
 ### Weg 2: Eigenes CiviOS-ISO
 
-Auf GitHub unter **Actions → CiviOS ISO bauen → Run workflow**. Nach 30 bis 90 Minuten liegt das ISO als Download im Workflow-Lauf. Mit [Ventoy](https://www.ventoy.net) oder dem KDE ISO Image Writer auf einen USB-Stick schreiben.
+**Fertiges ISO herunterladen:** Auf GitHub unter **Actions → CiviOS ISO bauen**, den letzten grünen Lauf öffnen und unten bei *Artifacts* `civios-iso` laden. Man muss dafür bei GitHub angemeldet sein. Der Download ist eine ZIP-Datei mit dem ISO (etwa 5 GB). Artefakte werden nach 14 Tagen gelöscht, dann einfach neu bauen.
 
-Lokal auf einem Linux-Rechner mit Docker:
+**Neu bauen:** **Actions → CiviOS ISO bauen → Run workflow**. Dauert etwa eine Stunde. Danach prüft `iso/verify-iso.sh` automatisch, ob alle CiviOS-Dateien, PySide6, die Schriften und der CiviOS-Name im Bootmenü im ISO stecken.
+
+**Auf einen USB-Stick:** mit [Ventoy](https://www.ventoy.net) (ISO einfach auf den Stick kopieren) oder dem KDE ISO Image Writer. Zum ersten Ausprobieren besser in VirtualBox oder GNOME Boxes starten.
+
+**Lokal bauen** (Linux mit Docker, etwa 60 GB frei):
 ```bash
 sudo docker run --rm --privileged -v "$PWD":/work -w /work archlinux:latest bash iso/build-iso.sh
+sudo iso/verify-iso.sh out/*.iso
 ```
+
+Live-Sitzung: Benutzer `civios`, Passwort `civios`.
 
 ## CiviOS Center
 
@@ -115,7 +122,9 @@ civios/
 
 **Getestet:** `install.sh` (Installieren, erneut Installieren, Entfernen mit Wiederherstellung), alle `civios`-Befehle mit nachgebildeten Garuda-Werkzeugen, `civios compat` gegen die echte Datenbank, Syntax aller Skripte mit shellcheck, Layout-Skript und JSON-Dateien.
 
-**Noch nicht getestet:** Ein echter Plasma-Desktop mit dem Theme und der ISO-Build. Beides kann ich in meiner Arbeitsumgebung nicht ausführen. Der ISO-Build nutzt die offiziellen Garuda-Werkzeuge, deren öffentliche Doku teilweise veraltet ist. Beim ersten Lauf auf GitHub sind deshalb Korrekturen wahrscheinlich. Das Skript gibt bei Fehlern genau aus, was fehlt.
+**Ebenfalls geprüft:** Der ISO-Build läuft auf GitHub durch (19.10.2026), das CiviOS Center wurde auf allen Seiten gerendert und angeschaut.
+
+**Noch nicht getestet:** Das ISO auf echter Hardware oder in einer VM booten und installieren, und das Theme in einer echten Plasma-Sitzung. Das geht nur mit Bildschirm, also bitte zuerst in einer VM ausprobieren und Probleme melden.
 
 **Bekannte Grenzen:**
 - Secure Boot wird von Garuda nicht offiziell unterstützt.
@@ -126,7 +135,7 @@ civios/
 
 ## Nächste Schritte
 
-1. Ersten ISO-Build auf GitHub laufen lassen und Fehler beheben
+1. ISO in einer VM und auf echter Hardware testen
 2. Theme auf echter Hardware prüfen und Feinschliff (Abstände, Dock-Grösse, Transparenz)
 3. Abgerundete Fenster und eigene Fensterdekoration
 4. Eigenes Calamares- und GRUB-Branding

@@ -1,0 +1,84 @@
+name: ISO Boot-Test
+
+# Startet ein fertiges CiviOS-ISO in QEMU, macht Bildschirmfotos und legt sie
+# im Branch "bootbilder" ab. So lässt sich prüfen, ob das Live-System hochfährt.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "ID des ISO-Build-Laufs (leer = letzter erfolgreicher)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  boot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Lauf bestimmen
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RID="${{ inputs.run_id }}"
+          if [ -z "$RID" ]; then
+            RID=$(gh run list -w iso.yml -s success -L 1 --json databaseId -q '.[0].databaseId')
+          fi
+          echo "Lauf: $RID"
+          echo "rid=$RID" >> "$GITHUB_OUTPUT"
+
+      - name: ISO laden
+        uses: actions/download-artifact@v5
+        with:
+          name: civios-iso
+          path: iso-in
+          run-id: ${{ steps.run.outputs.rid }}
+          github-token: ${{ github.token }}
+
+      - name: QEMU einrichten
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86 qemu-utils socat imagemagick >/dev/null
+          # KVM für den Runner-Benutzer freigeben, falls vorhanden.
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+            sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+            echo "KVM verfügbar"
+          else
+            echo "Kein KVM, Boot wird sehr langsam"
+          fi
+
+      - name: ISO booten und Bildschirmfotos machen
+        run: |
+          ISO=$(ls iso-in/*.iso | head -n1)
+          ACCEL=""; [ -w /dev/kvm ] && ACCEL="-enable-kvm -cpu host"
+          mkdir -p shots
+          qemu-system-x86_64 $ACCEL -m 6144 -smp 4 -cdrom "$ISO" -boot d \
+            -vga virtio -display none -serial file:shots/serial.log \
+            -monitor unix:/tmp/mon,server,nowait &
+          QPID=$!
+          for t in 20 60 120 180 240 330; do
+            sleep $(( t - ${last:-0} )); last=$t
+            echo "screendump /tmp/shot-$t.ppm" | socat - unix-connect:/tmp/mon >/dev/null || true
+            sleep 2
+            [ -f /tmp/shot-$t.ppm ] && convert /tmp/shot-$t.ppm -resize 1280x shots/boot-${t}s.png
+            echo "Bild nach ${t}s: $(ls shots/boot-${t}s.png 2>/dev/null || echo fehlt)"
+          done
+          kill $QPID || true
+
+      - name: Bilder in Branch bootbilder ablegen
+        run: |
+          cd shots
+          git init -q -b bootbilder
+          git config user.name "civios-ci"
+          git config user.email "civios-ci@users.noreply.github.com"
+          echo "Boot-Test von Lauf ${{ steps.run.outputs.rid }}, $(date -u)" > README.md
+          git add -A
+          git commit -qm "Boot-Test ${{ steps.run.outputs.rid }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" bootbilder
