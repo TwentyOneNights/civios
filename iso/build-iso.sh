@@ -53,16 +53,30 @@ done
 [[ -n $installed ]] || die "garuda-tools nicht in den Paketquellen gefunden. Verfügbar: $(pacman -Ssq garuda-tools | tr '\n' ' ')"
 echo "Installiert: $installed"
 
+# garuda-tools liest Name, Version und Codename aus /etc/lsb-release.
+# Im Arch-Container fehlt die Datei. Sie betrifft nur den Build-Rechner, nicht das ISO.
+cat > /etc/lsb-release <<'EOF'
+DISTRIB_ID="Garuda"
+DISTRIB_RELEASE="Rolling"
+DISTRIB_CODENAME="CiviOS"
+DISTRIB_DESCRIPTION="CiviOS Build"
+EOF
+
 mkdir -p /root/.config/garuda-tools
 cat > /root/.config/garuda-tools/garuda-tools.conf <<'EOF'
 dist_branding="CIVIOS"
 EOF
 
 buildiso -i
-REPO_INFO=$(find / -xdev -name repo_info -path '*iso-profiles*' 2>/dev/null | head -n1)
-[[ -n $REPO_INFO ]] || die "iso-profiles wurden nicht geladen (repo_info fehlt)."
-RUN_DIR=$(dirname "$REPO_INFO")
+RUN_DIR=/var/cache/garuda-tools/iso-profiles
+if [[ ! -d $RUN_DIR/garuda && ! -d $RUN_DIR/community ]]; then
+    die "iso-profiles nicht gefunden. Inhalt: $(ls -la /var/cache/garuda-tools 2>&1)"
+fi
 echo "Profile in: $RUN_DIR"
+ls "$RUN_DIR" "$RUN_DIR/garuda" 2>/dev/null || true
+# garuda-tools erkennt den Profilordner an einer repo_info-Datei.
+[[ -f $RUN_DIR/repo_info ]] || touch "$RUN_DIR/repo_info"
+REPO_INFO=$RUN_DIR/repo_info
 
 step "3/5 Vorlage '$BASE_PROFILE' kopieren"
 SRC_PROFILE=$(find "$RUN_DIR" -mindepth 2 -maxdepth 2 -type d -name "$BASE_PROFILE" | head -n1)
