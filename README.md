@@ -32,7 +32,7 @@ CiviOS ist **Garuda Linux mit einer eigenen Schicht obendrauf**. Unter der Haube
 1. [Garuda Linux](https://garudalinux.org) installieren, am besten die **Dr460nized Gaming**-Edition. Secure Boot im BIOS ausschalten, Garuda unterstützt es nicht offiziell.
 2. Im Terminal:
    ```bash
-   git clone https://github.com/REPO_OWNER/civios.git
+   git clone https://github.com/TwentyOneNights/civios.git
    cd civios
    sudo ./install.sh
    civios theme apply
