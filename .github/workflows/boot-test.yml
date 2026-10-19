@@ -45,6 +45,25 @@ jobs:
           run-id: ${{ steps.run.outputs.rid }}
           github-token: ${{ github.token }}
 
+      - name: Startsystem (initramfs) untersuchen
+        run: |
+          ISO=$(ls iso-in/*.iso | head -n1)
+          sudo mkdir -p /mnt/iso && sudo mount -o loop,ro "$ISO" /mnt/iso
+          IMG=$(find /mnt/iso/boot -name 'initramfs*.img' | head -n1)
+          mkdir -p initrd && unmkinitramfs "$IMG" initrd
+          {
+            echo "initramfs: $IMG ($(du -h "$IMG" | cut -f1))"
+            for m in usb-storage uas xhci-pci xhci-hcd ehci-pci sd_mod ahci nvme virtio_blk sr_mod; do
+              if find initrd -name "${m//-/[-_]}.ko*" | grep -q .; then echo "  vorhanden  $m"; else echo "  FEHLT      $m"; fi
+            done
+            echo "Treiber gesamt: $(find initrd -name '*.ko*' | wc -l)"
+            echo "--- dracut-Konfiguration im initramfs ---"
+            cat initrd/*/etc/dracut.conf.d/* initrd/etc/dracut.conf.d/* 2>/dev/null | grep -v '^#' | head -n 20
+          } | tee initrd.txt
+          sed 's/%/%25/g' initrd.txt | split -l 12 - ipart.
+          for f in ipart.*; do echo "::notice title=initramfs ${f#ipart.}::$(awk '{printf "%s%%0A", $0}' "$f")"; done
+          sudo umount /mnt/iso
+
       - name: QEMU einrichten
         run: |
           sudo apt-get update -qq
