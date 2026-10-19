@@ -1,0 +1,625 @@
+#!/usr/bin/python3
+"""CiviOS Center: grafische Systemsteuerung für CiviOS.
+
+Nutzt dieselbe Logik wie das Kommandozeilenwerkzeug (civios_core).
+Aktionen, die Root-Rechte brauchen, laufen sichtbar in Konsole, damit man
+sieht, was passiert, und das Passwort dort eingibt.
+"""
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+for candidate in ("/usr/lib/civios",
+                  str(Path(__file__).resolve().parent.parent / "lib/civios")):
+    if Path(candidate, "civios_core.py").exists():
+        sys.path.insert(0, candidate)
+        break
+import civios_core as core  # noqa: E402
+
+from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal, QSize  # noqa: E402
+from PySide6.QtGui import QFont, QIcon, QPainter, QColor, QPixmap  # noqa: E402
+from PySide6.QtSvg import QSvgRenderer  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
+    QApplication, QButtonGroup, QCheckBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
+    QLineEdit, QMainWindow, QPushButton, QScrollArea, QSizePolicy, QStackedWidget,
+    QVBoxLayout, QWidget,
+)
+
+LOGO = Path("/usr/share/icons/hicolor/scalable/apps/civios-logo.svg")
+if not LOGO.exists():
+    LOGO = Path(__file__).resolve().parent.parent / "share/icons/hicolor/scalable/apps/civios-logo.svg"
+
+DARK = {
+    "bg": "#141415", "sidebar": "#0f0f10", "card": "#1c1c1e", "card_hover": "#232326",
+    "border": "#2a2a2d", "text": "#eceae6", "muted": "#96948f", "accent": "#f2c055",
+    "accent_text": "#141414", "good": "#78c882", "warn": "#f2a04b", "bad": "#eb5e55",
+    "info": "#6ea0eb",
+}
+LEVEL = {"good": "good", "warn": "warn", "info": "info", "bad": "bad"}
+
+
+def stylesheet(p):
+    return f"""
+    QMainWindow, QWidget#page {{ background: {p['bg']}; }}
+    QWidget {{ color: {p['text']}; font-size: 10.5pt; }}
+    QWidget#sidebar {{ background: {p['sidebar']}; border-right: 1px solid {p['border']}; }}
+    QLabel#brand {{ font-size: 15pt; font-weight: 600; }}
+    QLabel#brandsub {{ color: {p['muted']}; font-size: 9pt; }}
+    QPushButton#nav {{
+        text-align: left; padding: 9px 14px; border: none; border-radius: 10px;
+        background: transparent; color: {p['muted']}; font-size: 10.5pt;
+    }}
+    QPushButton#nav:hover {{ background: {p['card']}; color: {p['text']}; }}
+    QPushButton#nav:checked {{ background: {p['card']}; color: {p['accent']}; font-weight: 600; }}
+    QLabel#title {{ font-size: 22pt; font-weight: 600; }}
+    QLabel#subtitle {{ color: {p['muted']}; font-size: 10.5pt; }}
+    QLabel#section {{ font-size: 12pt; font-weight: 600; margin-top: 8px; }}
+    QFrame#card {{ background: {p['card']}; border: 1px solid {p['border']}; border-radius: 14px; }}
+    QLabel#cardlabel {{ color: {p['muted']}; font-size: 9pt; }}
+    QLabel#cardvalue {{ font-size: 12pt; font-weight: 600; }}
+    QLabel#muted {{ color: {p['muted']}; }}
+    QLabel#pill {{ border-radius: 9px; padding: 2px 10px; font-size: 9pt; font-weight: 600; }}
+    QPushButton {{
+        background: {p['card']}; border: 1px solid {p['border']}; border-radius: 10px;
+        padding: 8px 16px;
+    }}
+    QPushButton:hover {{ background: {p['card_hover']}; }}
+    QPushButton#primary {{
+        background: {p['accent']}; color: {p['accent_text']}; border: none; font-weight: 600;
+    }}
+    QPushButton#primary:hover {{ background: #f6cd74; }}
+    QPushButton:disabled {{ color: {p['muted']}; }}
+    QLineEdit {{
+        background: {p['card']}; border: 1px solid {p['border']}; border-radius: 10px;
+        padding: 9px 12px; selection-background-color: {p['accent']};
+    }}
+    QLineEdit:focus {{ border: 1px solid {p['accent']}; }}
+    QCheckBox::indicator {{ width: 18px; height: 18px; border-radius: 5px;
+        border: 1px solid {p['border']}; background: {p['bg']}; }}
+    QCheckBox::indicator:checked {{ background: {p['accent']}; border: 1px solid {p['accent']}; }}
+    QScrollArea {{ border: none; background: transparent; }}
+    QScrollBar:vertical {{ background: transparent; width: 8px; }}
+    QScrollBar::handle:vertical {{ background: {p['border']}; border-radius: 4px; min-height: 30px; }}
+    QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
+    """
+
+
+# ---------- Hilfsfunktionen ----------
+
+class _Signals(QObject):
+    done = Signal(object)
+
+
+_LIVE = set()  # hält Signal-Objekte am Leben, bis das Ergebnis angekommen ist
+
+
+class Job(QRunnable):
+    """Führt eine Funktion im Hintergrund aus und meldet das Ergebnis im UI-Thread."""
+
+    def __init__(self, fn, callback):
+        super().__init__()
+        self.fn, self.signals = fn, _Signals()
+        sig = self.signals
+        _LIVE.add(sig)
+
+        def deliver(result):
+            _LIVE.discard(sig)
+            callback(result)
+        sig.done.connect(deliver)
+
+    def run(self):
+        try:
+            result = self.fn()
+        except Exception as e:  # noqa: BLE001
+            result = e
+        self.signals.done.emit(result)
+
+
+def background(fn, callback):
+    QThreadPool.globalInstance().start(Job(fn, callback))
+
+
+def run_in_terminal(args, hold=True):
+    """Startet einen Befehl sichtbar in Konsole (oder einem anderen Terminal)."""
+    if shutil.which("konsole"):
+        cmd = ["konsole"] + (["--hold"] if hold else []) + ["-e"] + args
+    elif shutil.which("kitty"):
+        cmd = ["kitty", "--hold"] + args
+    else:
+        cmd = args
+    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def svg_icon(path, size=32):
+    pm = QPixmap(size * 2, size * 2)
+    pm.fill(Qt.transparent)
+    if Path(path).exists():
+        r = QSvgRenderer(str(path))
+        painter = QPainter(pm)
+        r.render(painter)
+        painter.end()
+    pm.setDevicePixelRatio(2)
+    return pm
+
+
+def label(text, name=None, wrap=False):
+    w = QLabel(text)
+    if name:
+        w.setObjectName(name)
+    w.setWordWrap(wrap)
+    w.setTextInteractionFlags(Qt.TextSelectableByMouse)
+    return w
+
+
+def pill(text, level):
+    w = QLabel(text)
+    w.setObjectName("pill")
+    c = QColor(DARK[LEVEL.get(level, "info")])
+    w.setStyleSheet(f"background: rgba({c.red()},{c.green()},{c.blue()},40); color: {c.name()};")
+    w.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+    return w
+
+
+def card():
+    f = QFrame()
+    f.setObjectName("card")
+    lay = QVBoxLayout(f)
+    lay.setContentsMargins(18, 16, 18, 16)
+    lay.setSpacing(6)
+    return f, lay
+
+
+def clear(layout):
+    while layout.count():
+        item = layout.takeAt(0)
+        if item.widget():
+            item.widget().deleteLater()
+        elif item.layout():
+            clear(item.layout())
+
+
+class Page(QWidget):
+    def __init__(self, title, subtitle):
+        super().__init__()
+        self.setObjectName("page")
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        inner = QWidget()
+        inner.setObjectName("page")
+        self.body = QVBoxLayout(inner)
+        self.body.setContentsMargins(36, 32, 36, 32)
+        self.body.setSpacing(14)
+        self.body.addWidget(label(title, "title"))
+        self.body.addWidget(label(subtitle, "subtitle", wrap=True))
+        self.body.addSpacing(6)
+        scroll.setWidget(inner)
+        outer.addWidget(scroll)
+
+    def finish(self):
+        self.body.addStretch(1)
+
+    def refresh(self):
+        pass
+
+
+# ---------- Seiten ----------
+
+class Overview(Page):
+    def __init__(self):
+        super().__init__("Übersicht", "Dein System auf einen Blick.")
+        self.grid = QGridLayout()
+        self.grid.setSpacing(12)
+        self.body.addLayout(self.grid)
+        self.cards = {}
+        tiles = [("version", "CiviOS"), ("base", "Basis"), ("kernel", "Kernel"),
+                 ("cpu", "Prozessor"), ("mem", "Arbeitsspeicher"), ("gpu", "Grafik"),
+                 ("sb", "Secure Boot"), ("snaps", "Snapshots"), ("updates", "Updates")]
+        for i, (key, title) in enumerate(tiles):
+            f, lay = card()
+            lay.addWidget(label(title, "cardlabel"))
+            val = label("…", "cardvalue", wrap=True)
+            lay.addWidget(val)
+            self.cards[key] = val
+            self.grid.addWidget(f, i // 3, i % 3)
+        for col in range(3):
+            self.grid.setColumnStretch(col, 1)
+        self.finish()
+
+    def refresh(self):
+        name, version = core.civios_version()
+        self.cards["version"].setText(f"{name} {version}".strip())
+        self.cards["base"].setText(core.base_system())
+        self.cards["kernel"].setText(core.kernel())
+        self.cards["cpu"].setText(core.cpu_name() or "unbekannt")
+        mem = core.memory_gib()
+        self.cards["mem"].setText(f"{mem} GiB" if mem else "unbekannt")
+        g = core.gpus()
+        self.cards["gpu"].setText("\n".join(f"{v} · {d}" for v, d in g) if g else "nicht erkannt")
+        self.cards["sb"].setText(core.secure_boot())
+
+        def slow():
+            return core.snapshots(), core.pending_updates()
+
+        def show(res):
+            if isinstance(res, Exception):
+                return
+            snaps, upd = res
+            if snaps is None:
+                self.cards["snaps"].setText("nicht lesbar")
+            else:
+                self.cards["snaps"].setText(f"{len(snaps)} vorhanden")
+            if upd is None:
+                self.cards["updates"].setText("unbekannt")
+            else:
+                self.cards["updates"].setText("Aktuell" if upd == 0 else f"{upd} verfügbar")
+        background(slow, show)
+
+
+class Gaming(Page):
+    def __init__(self):
+        super().__init__("Gaming", "Prüft deinen Gaming-Stack und zeigt, ob ein Spiel mit "
+                                   "Anti-Cheat unter Linux läuft.")
+        self.body.addWidget(label("Systemcheck", "section"))
+        self.checks = QVBoxLayout()
+        self.checks.setSpacing(8)
+        self.body.addLayout(self.checks)
+
+        self.body.addWidget(label("Anti-Cheat-Kompatibilität", "section"))
+        row = QHBoxLayout()
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Spiel suchen, z. B. Elden Ring")
+        self.search.returnPressed.connect(self.do_search)
+        btn = QPushButton("Suchen")
+        btn.setObjectName("primary")
+        btn.clicked.connect(self.do_search)
+        row.addWidget(self.search, 1)
+        row.addWidget(btn)
+        self.body.addLayout(row)
+        self.results = QVBoxLayout()
+        self.results.setSpacing(8)
+        self.body.addLayout(self.results)
+        self.body.addWidget(label("Quelle: AreWeAntiCheatYet. Spiele ohne Anti-Cheat stehen "
+                                  "nicht in dieser Datenbank, für sie ist ProtonDB besser.",
+                                  "muted", wrap=True))
+        self.db = None
+        self.finish()
+
+    def refresh(self):
+        clear(self.checks)
+        self.checks.addWidget(label("Wird geprüft …", "muted"))
+        background(core.doctor_checks, self.show_checks)
+
+    def show_checks(self, checks):
+        clear(self.checks)
+        if isinstance(checks, Exception):
+            self.checks.addWidget(label(f"Fehler: {checks}", "muted"))
+            return
+        for name, ok, detail in checks:
+            f, lay = card()
+            lay.setContentsMargins(16, 10, 16, 10)
+            row = QHBoxLayout()
+            row.addWidget(label(name, "cardvalue"))
+            row.addStretch(1)
+            row.addWidget(pill("OK" if ok else "Fehlt", "good" if ok else "bad"))
+            lay.addLayout(row)
+            lay.addWidget(label(detail, "muted", wrap=True))
+            self.checks.addWidget(f)
+
+    def do_search(self):
+        query = self.search.text().strip()
+        if not query:
+            return
+        clear(self.results)
+        self.results.addWidget(label("Suche …", "muted"))
+
+        def work():
+            if self.db is None:
+                self.db, note = core.load_anticheat_db()
+                if self.db is None:
+                    return note
+            return core.search_games(self.db, query, 8)
+
+        background(work, self.show_results)
+
+    def show_results(self, res):
+        clear(self.results)
+        if isinstance(res, (str, Exception)):
+            self.results.addWidget(label(str(res), "muted", wrap=True))
+            return
+        if not res:
+            self.results.addWidget(label("Kein Eintrag gefunden.", "muted"))
+            return
+        for h in res:
+            f, lay = card()
+            row = QHBoxLayout()
+            row.addWidget(label(h["name"], "cardvalue"))
+            if h["native"]:
+                row.addWidget(pill("Native", "info"))
+            row.addStretch(1)
+            row.addWidget(pill(h["status"], h["level"]))
+            lay.addLayout(row)
+            lay.addWidget(label(h["explanation"], wrap=True))
+            if h["anticheats"]:
+                lay.addWidget(label("Anti-Cheat: " + ", ".join(h["anticheats"]), "muted"))
+            for n in h["notes"]:
+                lay.addWidget(label("· " + n, "muted", wrap=True))
+            self.results.addWidget(f)
+
+
+class Updates(Page):
+    def __init__(self):
+        super().__init__("Updates und Sicherung",
+                         "Vor jedem Update legt das System automatisch einen Snapshot an. "
+                         "Geht etwas schief, startest du im Bootmenü einfach den Zustand davor.")
+        row = QHBoxLayout()
+        upd = QPushButton("Jetzt aktualisieren")
+        upd.setObjectName("primary")
+        upd.clicked.connect(lambda: run_in_terminal(["civios", "update"]))
+        rb = QPushButton("Wiederherstellen …")
+        rb.clicked.connect(self.rollback)
+        row.addWidget(upd)
+        row.addWidget(rb)
+        row.addStretch(1)
+        self.body.addLayout(row)
+        self.status = label("", "muted", wrap=True)
+        self.body.addWidget(self.status)
+        self.body.addWidget(label("Letzte Snapshots", "section"))
+        self.list = QVBoxLayout()
+        self.list.setSpacing(6)
+        self.body.addLayout(self.list)
+        self.finish()
+
+    def rollback(self):
+        _rollback_dialog(self)
+
+    def refresh(self):
+        clear(self.list)
+        self.list.addWidget(label("Wird geladen …", "muted"))
+        background(lambda: (core.snapshots(), core.pending_updates()), self.show)
+
+    def show(self, res):
+        clear(self.list)
+        if isinstance(res, Exception):
+            self.list.addWidget(label(f"Fehler: {res}", "muted"))
+            return
+        snaps, upd = res
+        if upd is None:
+            self.status.setText("Offene Updates konnten nicht geprüft werden.")
+        elif upd == 0:
+            self.status.setText("Dein System ist aktuell.")
+        else:
+            self.status.setText(f"{upd} Pakete können aktualisiert werden.")
+        if snaps is None:
+            self.list.addWidget(label("Snapshots sind ohne Administratorrechte nicht lesbar "
+                                      "oder snapper ist nicht eingerichtet.", "muted", wrap=True))
+            return
+        if not snaps:
+            self.list.addWidget(label("Noch keine Snapshots vorhanden.", "muted"))
+            return
+        for s in reversed(snaps[-12:]):
+            f, lay = card()
+            lay.setContentsMargins(16, 10, 16, 10)
+            row = QHBoxLayout()
+            row.addWidget(label(f"#{s['number']}", "cardvalue"))
+            row.addWidget(label(s["date"], "muted"))
+            row.addStretch(1)
+            if s["important"]:
+                row.addWidget(pill("Wichtig", "warn"))
+            row.addWidget(pill(s["type"] or "single", "info"))
+            lay.addLayout(row)
+            if s["description"]:
+                lay.addWidget(label(s["description"], wrap=True))
+            self.list.addWidget(f)
+
+
+def _rollback_dialog(parent):
+    from PySide6.QtWidgets import QMessageBox
+    box = QMessageBox(parent)
+    box.setWindowTitle("Wiederherstellen")
+    box.setText("So holst du einen funktionierenden Zustand zurück:")
+    box.setInformativeText(
+        "1. Neu starten und im Bootmenü „Garuda Linux snapshots“ wählen.\n"
+        "2. Den Snapshot vor dem fehlerhaften Update starten.\n"
+        "3. Wenn alles läuft, in Btrfs Assistant „Restore“ wählen.\n\n"
+        "Dein persönlicher Ordner bleibt dabei unverändert.")
+    exe = shutil.which("btrfs-assistant-launcher") or shutil.which("btrfs-assistant")
+    open_btn = box.addButton("Btrfs Assistant öffnen", QMessageBox.AcceptRole) if exe else None
+    box.addButton("Schliessen", QMessageBox.RejectRole)
+    box.exec()
+    if open_btn is not None and box.clickedButton() is open_btn:
+        subprocess.Popen([exe], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+
+class Apps(Page):
+    def __init__(self):
+        super().__init__("Apps", "Empfohlene Programme für Gaming, Arbeit und Kreativität. "
+                                 "Die Installation läuft sichtbar im Terminal.")
+        self.list = QVBoxLayout()
+        self.list.setSpacing(8)
+        self.body.addLayout(self.list)
+        row = QHBoxLayout()
+        self.install = QPushButton("Ausgewählte installieren")
+        self.install.setObjectName("primary")
+        self.install.clicked.connect(self.do_install)
+        row.addStretch(1)
+        row.addWidget(self.install)
+        self.body.addLayout(row)
+        self.boxes = []
+        self.finish()
+
+    def refresh(self):
+        clear(self.list)
+        self.boxes = []
+        self.list.addWidget(label("Wird geladen …", "muted"))
+        background(core.app_catalog, self.show)
+
+    def show(self, apps):
+        clear(self.list)
+        if isinstance(apps, Exception) or not apps:
+            self.list.addWidget(label("Keine App-Liste gefunden.", "muted"))
+            return
+        for app in apps:
+            f, lay = card()
+            lay.setContentsMargins(16, 10, 16, 10)
+            row = QHBoxLayout()
+            box = QCheckBox()
+            box.setEnabled(not app["installed"])
+            box.setProperty("pkg", app["name"])
+            self.boxes.append(box)
+            row.addWidget(box)
+            text = QVBoxLayout()
+            text.setSpacing(0)
+            text.addWidget(label(app["description"] or app["name"], "cardvalue"))
+            text.addWidget(label(app["name"], "muted"))
+            row.addLayout(text, 1)
+            if app["installed"]:
+                row.addWidget(pill("Installiert", "good"))
+            lay.addLayout(row)
+            self.list.addWidget(f)
+
+    def do_install(self):
+        pkgs = [b.property("pkg") for b in self.boxes if b.isChecked()]
+        if pkgs:
+            run_in_terminal(["civios", "apps"] + pkgs)
+
+
+class Design(Page):
+    def __init__(self):
+        super().__init__("Design", "Wechsle zwischen dunklem und hellem CiviOS-Design oder "
+                                   "stelle das ursprüngliche Layout wieder her.")
+        grid = QGridLayout()
+        grid.setSpacing(12)
+        for i, (title, desc, scheme, preview) in enumerate((
+            ("Dunkel", "Tiefschwarz und Anthrazit", "dark", ("#141415", "#1c1c1e", "#f2c055")),
+            ("Hell", "Warmes Weiss mit Goldakzent", "light", ("#faf9f6", "#eeece8", "#c48c14")),
+        )):
+            f, lay = card()
+            swatch = QLabel()
+            swatch.setFixedHeight(90)
+            bg, panel, acc = preview
+            swatch.setStyleSheet(
+                f"border-radius: 10px; background: qlineargradient(x1:0,y1:0,x2:1,y2:1,"
+                f"stop:0 {bg}, stop:0.7 {panel}, stop:1 {acc});")
+            lay.addWidget(swatch)
+            lay.addWidget(label(title, "cardvalue"))
+            lay.addWidget(label(desc, "muted"))
+            btn = QPushButton(f"{title} verwenden")
+            btn.clicked.connect(lambda _=False, s=scheme: self.apply_scheme(s))
+            lay.addWidget(btn)
+            grid.addWidget(f, 0, i)
+        self.body.addLayout(grid)
+
+        self.body.addWidget(label("Layout", "section"))
+        f, lay = card()
+        lay.addWidget(label("Leiste oben, schwebendes Dock unten, CiviOS-Hintergrund und "
+                            "Terminal-Design wiederherstellen. Eigene Panel-Änderungen gehen "
+                            "dabei verloren.", wrap=True))
+        reset = QPushButton("CiviOS-Layout wiederherstellen")
+        reset.clicked.connect(lambda: subprocess.Popen(["civios", "theme", "apply", "-y"]))
+        row = QHBoxLayout()
+        row.addWidget(reset)
+        row.addStretch(1)
+        lay.addLayout(row)
+        self.body.addWidget(f)
+        self.msg = label("", "muted")
+        self.body.addWidget(self.msg)
+        self.finish()
+
+    def apply_scheme(self, scheme):
+        rc = subprocess.call(["civios", "theme", scheme])
+        self.msg.setText("Farbschema angewendet." if rc == 0
+                         else "Konnte das Farbschema nicht anwenden. Läuft KDE Plasma?")
+
+
+# ---------- Fenster ----------
+
+class Center(QMainWindow):
+    PAGES = (("Übersicht", Overview), ("Gaming", Gaming), ("Updates", Updates),
+             ("Apps", Apps), ("Design", Design))
+
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("CiviOS Center")
+        self.setWindowIcon(QIcon(str(LOGO)))
+        self.resize(1080, 720)
+        self.setMinimumSize(860, 560)
+
+        root = QWidget()
+        h = QHBoxLayout(root)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(0)
+
+        side = QWidget()
+        side.setObjectName("sidebar")
+        side.setFixedWidth(232)
+        sv = QVBoxLayout(side)
+        sv.setContentsMargins(16, 22, 16, 18)
+        sv.setSpacing(4)
+        brand = QHBoxLayout()
+        logo = QLabel()
+        logo.setPixmap(svg_icon(LOGO, 30))
+        brand.addWidget(logo)
+        names = QVBoxLayout()
+        names.setSpacing(0)
+        names.addWidget(label("CiviOS", "brand"))
+        names.addWidget(label("Center", "brandsub"))
+        brand.addLayout(names, 1)
+        sv.addLayout(brand)
+        sv.addSpacing(22)
+
+        self.stack = QStackedWidget()
+        group = QButtonGroup(self)
+        group.setExclusive(True)
+        self.pages = []
+        for i, (title, cls) in enumerate(self.PAGES):
+            btn = QPushButton(title)
+            btn.setObjectName("nav")
+            btn.setCheckable(True)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.clicked.connect(lambda _=False, idx=i: self.show_page(idx))
+            group.addButton(btn)
+            sv.addWidget(btn)
+            page = cls()
+            self.pages.append((btn, page, False))
+            self.stack.addWidget(page)
+        sv.addStretch(1)
+        name, version = core.civios_version()
+        sv.addWidget(label(f"{name} {version}".strip(), "brandsub"))
+
+        h.addWidget(side)
+        h.addWidget(self.stack, 1)
+        self.setCentralWidget(root)
+        self.show_page(0)
+
+    def show_page(self, idx):
+        btn, page, loaded = self.pages[idx]
+        btn.setChecked(True)
+        self.stack.setCurrentIndex(idx)
+        if not loaded:
+            self.pages[idx] = (btn, page, True)
+            QTimer.singleShot(0, page.refresh)
+
+
+def main():
+    app = QApplication(sys.argv)
+    app.setApplicationName("CiviOS Center")
+    app.setDesktopFileName("civios-center")
+    font = QFont("Inter")
+    font.setPointSizeF(10.5)
+    app.setFont(font)
+    app.setStyle("Fusion")
+    app.setStyleSheet(stylesheet(DARK))
+    win = Center()
+    win.show()
+    if "--page" in sys.argv:
+        idx = int(sys.argv[sys.argv.index("--page") + 1])
+        win.show_page(idx)
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

@@ -10,7 +10,7 @@ set -euo pipefail
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/overlay"
 MANIFEST=/usr/share/civios/installed-files
 BACKUP=/var/backups/civios
-DEPS=(inter-font ttf-jetbrains-mono vulkan-tools pacman-contrib)
+DEPS=(inter-font ttf-jetbrains-mono vulkan-tools pacman-contrib pyside6)
 
 say()  { printf '\033[38;2;242;192;85m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[33mHinweis:\033[0m %s\n' "$*"; }
@@ -63,7 +63,7 @@ done < <(cd "$SRC" && find . -type f -print0)
 
 say "Kopiere CiviOS-Dateien"
 cp -r --no-preserve=ownership "$SRC"/. /
-chmod 755 /usr/bin/civios /usr/bin/civios-firstrun
+chmod 755 /usr/bin/civios /usr/bin/civios-firstrun /usr/bin/civios-center
 install -Dm644 "$new_manifest" "$MANIFEST"
 rm -f "$new_manifest"
 

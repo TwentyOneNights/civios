@@ -8,7 +8,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Shell-Skripte
         run: |
@@ -16,7 +16,7 @@ jobs:
 
       - name: Python
         run: |
-          python3 -m py_compile overlay/usr/bin/civios
+          python3 -m py_compile overlay/usr/bin/civios overlay/usr/bin/civios-center overlay/usr/lib/civios/civios_core.py
           NO_COLOR=1 python3 overlay/usr/bin/civios --help
           NO_COLOR=1 python3 overlay/usr/bin/civios compat "counter-strike 2" --limit 1
 

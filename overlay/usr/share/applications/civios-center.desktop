@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=CiviOS Center
+GenericName=Systemsteuerung
+Comment=Übersicht, Gaming, Updates, Apps und Design
+Exec=civios-center
+Icon=civios-logo
+Categories=System;Settings;
+Keywords=civios;system;gaming;update;snapshot;design;
+StartupWMClass=civios-center

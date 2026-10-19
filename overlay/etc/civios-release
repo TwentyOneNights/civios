@@ -1,4 +1,4 @@
 CIVIOS_NAME="CiviOS"
-CIVIOS_VERSION="0.2.0"
+CIVIOS_VERSION="0.3.0"
 CIVIOS_BASE="Garuda Linux"
 CIVIOS_HOME_URL="https://github.com/TwentyOneNights/civios"

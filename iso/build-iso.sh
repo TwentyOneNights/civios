@@ -95,7 +95,7 @@ done < "$WORK/iso/Packages-Remove"
 # Overlay: wird nach der Paketinstallation ins Desktop-Image kopiert.
 mkdir -p "$DEST/desktop-overlay"
 cp -a "$WORK/overlay/." "$DEST/desktop-overlay/"
-chmod 755 "$DEST/desktop-overlay/usr/bin/civios" "$DEST/desktop-overlay/usr/bin/civios-firstrun"
+chmod 755 "$DEST"/desktop-overlay/usr/bin/civios*
 
 # Live-Sitzung umbenennen. Spätere Zuweisungen in profile.conf gewinnen.
 cat >> "$DEST/profile.conf" <<'EOF'

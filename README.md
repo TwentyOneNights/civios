@@ -2,7 +2,7 @@
 
 Mein Gaming- und Alltagssystem auf Basis von **Garuda Linux** mit eigenem Design: Tiefschwarz, Anthrazit und warmes Gelb.
 
-Version 0.2.0
+Version 0.3.0
 
 ## Was CiviOS ist
 
@@ -50,6 +50,18 @@ Lokal auf einem Linux-Rechner mit Docker:
 sudo docker run --rm --privileged -v "$PWD":/work -w /work archlinux:latest bash iso/build-iso.sh
 ```
 
+## CiviOS Center
+
+Die eigene Systemsteuerung, zu finden im Dock und im Startmenü (`civios-center`):
+
+- **Übersicht:** CiviOS-Version, Basis, Kernel, Prozessor, Arbeitsspeicher, Grafik, Secure Boot, Snapshots, Updates
+- **Gaming:** Systemcheck (Vulkan, GameMode, MangoHud, Steam, Multilib, Chaotic-AUR, Snapshots) und Anti-Cheat-Suche
+- **Updates:** Aktualisieren mit einem Klick, letzte Snapshots, Anleitung zur Wiederherstellung mit Btrfs Assistant
+- **Apps:** Empfohlene Programme auswählen und installieren
+- **Design:** Dunkel oder hell, Layout wiederherstellen
+
+Aktionen mit Administratorrechten laufen sichtbar im Terminal. So siehst du immer, was passiert.
+
 ## Befehle
 
 | Befehl | Was er macht |
@@ -60,7 +72,8 @@ sudo docker run --rm --privileged -v "$PWD":/work -w /work archlinux:latest bash
 | `civios rollback` | Erklärt die Wiederherstellung und öffnet Btrfs Assistant |
 | `civios compat <Spiel>` | Anti-Cheat-Status aus AreWeAntiCheatYet. Blockierte Spiele werden klar als blockiert angezeigt |
 | `civios doctor` | Prüft Vulkan, GameMode, MangoHud, Steam, Multilib, Chaotic-AUR, Snapshots |
-| `civios apps` | Installiert optionale Programme aus `apps.list`, nur nach Bestätigung |
+| `civios apps [Paket ...]` | Installiert optionale Programme aus `apps.list`, nur nach Bestätigung |
+| `civios theme light` / `dark` | Wechselt zwischen hellem und dunklem Farbschema |
 | `civios theme apply` | Wendet das CiviOS-Design neu an |
 
 ## Projektstruktur
@@ -76,6 +89,8 @@ civios/
 │   └── usr/
 │       ├── bin/civios               Systemwerkzeug
 │       ├── bin/civios-firstrun
+│       ├── bin/civios-center        Grafische Systemsteuerung (PySide6)
+│       ├── lib/civios/civios_core.py  Gemeinsame Logik
 │       └── share/
 │           ├── plasma/look-and-feel/org.civios.desktop/   Global Theme + Layout
 │           ├── color-schemes/       CiviOS, CiviOS Hell
@@ -112,7 +127,7 @@ civios/
 2. Theme auf echter Hardware prüfen und Feinschliff (Abstände, Dock-Grösse, Transparenz)
 3. Abgerundete Fenster und eigene Fensterdekoration
 4. Eigenes Calamares- und GRUB-Branding
-5. Grafisches CiviOS Control Center auf Basis von `civios`
+5. CiviOS Center erweitern (Treiber, Energieprofile, Hardware-Temperaturen)
 
 ## Lizenz
 

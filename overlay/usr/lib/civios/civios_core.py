@@ -14,6 +14,8 @@ from pathlib import Path
 
 VERSION_FILE = Path("/etc/civios-release")
 APPS_LIST = Path("/usr/share/civios/apps.list")
+if not APPS_LIST.exists():  # Quellbaum: overlay/usr/lib/civios -> overlay/usr/share/civios
+    APPS_LIST = Path(__file__).resolve().parents[2] / "share/civios/apps.list"
 AWACY_URL = ("https://raw.githubusercontent.com/AreWeAntiCheatYet/"
              "AreWeAntiCheatYet/HEAD/games.json")
 CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "civios"

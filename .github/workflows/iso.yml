@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Speicherplatz freimachen
         run: |
@@ -27,6 +27,7 @@ jobs:
       - name: ISO in Arch-Container bauen
         env:
           CIVIOS_BASE_PROFILE: ${{ inputs.base_profile || 'dr460nized-gaming' }}
+        shell: bash
         run: |
           sudo mkdir -p /mnt/garuda-lib /mnt/garuda-cache
           sudo docker run --rm --privileged \
@@ -34,7 +35,16 @@ jobs:
             -v "$PWD":/work -w /work \
             -v /mnt/garuda-lib:/var/lib/garuda-tools \
             -v /mnt/garuda-cache:/var/cache/garuda-tools \
-            archlinux:latest bash iso/build-iso.sh
+            archlinux:latest bash iso/build-iso.sh 2>&1 | tee build.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Fehlerausschnitt melden
+        if: failure()
+        run: |
+          # Die letzten Logzeilen als Annotation, damit sie auch über die API lesbar sind.
+          tail -n 80 build.log | sed -e 's/\x1b\[[0-9;]*m//g' -e 's/%/%25/g' > tail.txt
+          msg=$(awk '{printf "%s%%0A", $0}' tail.txt)
+          echo "::error title=ISO-Build fehlgeschlagen::${msg}"
 
       - name: ISO hochladen
         uses: actions/upload-artifact@v4

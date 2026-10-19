@@ -44,6 +44,7 @@ tasks.writeConfig("launchers", [
     "preferred://browser",
     "applications:steam.desktop",
     "applications:org.kde.konsole.desktop",
+    "applications:civios-center.desktop",
     "applications:systemsettings.desktop"
 ]);
 tasks.writeConfig("showOnlyCurrentDesktop", "false");
