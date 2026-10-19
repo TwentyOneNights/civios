@@ -24,6 +24,8 @@ CiviOS ist **Garuda Linux mit einer eigenen Schicht obendrauf**. Unter der Haube
 - **Layout:** schlanke Leiste oben (Launcher, Fenstermenü, Uhr mittig, Systembereich), schwebendes Dock unten, das Fenstern ausweicht
 - **Hintergrund:** reproduzierbar erzeugt mit `tools/make-wallpaper.py`
 - **Terminal:** eigenes Konsole-Farbschema und Profil
+- **Bootmenü:** eigenes GRUB-Theme mit goldenem Auswahlbalken (bei `install.sh` optional)
+- **Name im Live-ISO:** Bootmenü und Installer zeigen „CiviOS“
 
 ## Installation
 
@@ -37,7 +39,8 @@ CiviOS ist **Garuda Linux mit einer eigenen Schicht obendrauf**. Unter der Haube
    sudo ./install.sh
    civios theme apply
    ```
-3. Einmal ab- und wieder anmelden.
+3. Das Skript fragt, ob auch das Bootmenü das CiviOS-Design bekommen soll.
+4. Einmal ab- und wieder anmelden.
 
 Rückgängig machen: `sudo ./install.sh --uninstall`. Überschriebene Dateien werden vorher nach `/var/backups/civios/` gesichert und beim Entfernen zurückgespielt.
 
@@ -116,7 +119,7 @@ civios/
 
 **Bekannte Grenzen:**
 - Secure Boot wird von Garuda nicht offiziell unterstützt.
-- Der Installer (Calamares) und das Bootmenü zeigen noch Garuda-Branding.
+- Die Grafiken im Installer (Calamares) stammen noch von Garuda.
 - `/etc/os-release` bleibt Garuda, weil Garuda-Werkzeuge darauf prüfen. CiviOS steht in `/etc/civios-release`.
 - Abgerundete Fensterecken gibt es in Plasma nicht ab Werk. Dafür braucht es einen zusätzlichen KWin-Effekt (geplant).
 - Spiele mit Kernel-Anti-Cheat oder Linux-Sperre (z. B. Valorant, Fortnite) laufen nicht. CiviOS umgeht das nicht.

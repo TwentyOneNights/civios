@@ -12,7 +12,7 @@ jobs:
 
       - name: Shell-Skripte
         run: |
-          shellcheck -S warning install.sh iso/build-iso.sh overlay/usr/bin/civios-firstrun
+          shellcheck -S warning install.sh iso/build-iso.sh iso/verify-iso.sh overlay/usr/bin/civios-firstrun
 
       - name: Python
         run: |
