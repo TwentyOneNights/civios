@@ -2,61 +2,37 @@
 """civios: Systemwerkzeug für CiviOS (Basis: Garuda Linux).
 
 Befehle:
-  status          Version, Kernel, GPU, Secure Boot, Snapshots, offene Updates
-  update          System aktualisieren (garuda-update, vorher automatischer Snapshot)
-  snapshots       Btrfs-Snapshots anzeigen
-  rollback        Erklärt die Wiederherstellung und öffnet Btrfs Assistant
-  compat SPIEL    Anti-Cheat-Kompatibilität eines Spiels nachschlagen
-  doctor          Gaming-Stack und Systemschutz prüfen
-  apps            Optionale Anwendungen aus der CiviOS-Liste installieren
-  theme apply     CiviOS-Design erneut anwenden (setzt das Panel-Layout zurück)
-
-Nur Python-Standardbibliothek, damit das Werkzeug auch auf einem
-teilweise defekten System läuft.
+  status            Version, Kernel, GPU, Secure Boot, Snapshots, offene Updates
+  update            System aktualisieren (garuda-update, vorher automatischer Snapshot)
+  snapshots         Btrfs-Snapshots anzeigen
+  rollback          Erklärt die Wiederherstellung und öffnet Btrfs Assistant
+  compat SPIEL      Anti-Cheat-Kompatibilität eines Spiels nachschlagen
+  doctor            Gaming-Stack und Systemschutz prüfen
+  apps [PAKET ...]  Optionale Anwendungen installieren (ohne Angabe: ganze Liste)
+  theme apply       CiviOS-Design erneut anwenden (setzt das Panel-Layout zurück)
+  theme light|dark  Zwischen hellem und dunklem Farbschema wechseln
 """
 import argparse
-import json
 import os
 import shutil
 import subprocess
 import sys
-import time
-import urllib.request
 from pathlib import Path
 
-AWACY_URL = ("https://raw.githubusercontent.com/AreWeAntiCheatYet/"
-             "AreWeAntiCheatYet/HEAD/games.json")
-CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "civios"
-CACHE_MAX_AGE = 24 * 3600
-APPS_LIST = Path("/usr/share/civios/apps.list")
-RELEASE_FILE = Path("/etc/civios-release")
+# Installiert: /usr/lib/civios. Im Quellbaum: ../lib/civios relativ zu diesem Skript.
+for candidate in ("/usr/lib/civios",
+                  str(Path(__file__).resolve().parent.parent / "lib/civios")):
+    if Path(candidate, "civios_core.py").exists():
+        sys.path.insert(0, candidate)
+        break
+import civios_core as core  # noqa: E402
 
-STATUS_DE = {
-    "Supported": ("Unterstützt", "Läuft offiziell mit Anti-Cheat unter Linux/Proton."),
-    "Running": ("Läuft", "Startet, Anti-Cheat ist aber nicht offiziell freigegeben. Multiplayer kann eingeschränkt sein."),
-    "Planned": ("Geplant", "Der Hersteller hat Unterstützung angekündigt, sie ist aber noch nicht da."),
-    "Broken": ("Defekt", "Startet nicht oder Multiplayer funktioniert nicht."),
-    "Denied": ("Blockiert", "Der Hersteller blockiert Linux absichtlich. CiviOS umgeht das nicht."),
-}
-GPU_VENDORS = {"0x1002": "AMD", "0x10de": "NVIDIA", "0x8086": "Intel"}
 USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+LEVEL_COLOR = {"good": "32", "warn": "33", "info": "36", "bad": "31"}
 
 
 def c(text, code):
     return f"\033[{code}m{text}\033[0m" if USE_COLOR else text
-
-
-def accent(t):
-    return c(t, "38;2;242;192;85")
-
-
-def run(cmd):
-    """Führt einen Befehl aus und gibt (rc, stdout) zurück, ohne zu werfen."""
-    try:
-        p = subprocess.run(cmd, capture_output=True, text=True)
-        return p.returncode, p.stdout.strip()
-    except FileNotFoundError:
-        return 127, ""
 
 
 def confirm(question):
@@ -72,94 +48,30 @@ def sudo(cmd):
     return subprocess.call(cmd)
 
 
-def read_kv(path):
-    data = {}
-    try:
-        for line in Path(path).read_text().splitlines():
-            if "=" in line and not line.lstrip().startswith("#"):
-                k, v = line.split("=", 1)
-                data[k.strip()] = v.strip().strip('"')
-    except OSError:
-        pass
-    return data
-
-
-# ---------- status ----------
-
-def detect_gpus():
-    gpus = []
-    for card in sorted(Path("/sys/class/drm").glob("card[0-9]*")):
-        if "-" in card.name:
-            continue
-        try:
-            vendor = (card / "device/vendor").read_text().strip()
-            driver = Path(os.readlink(card / "device/driver")).name
-        except OSError:
-            continue
-        gpus.append(f"{GPU_VENDORS.get(vendor, vendor)} (Treiber: {driver})")
-    return gpus
-
-
-def secure_boot_state():
-    rc, out = run(["mokutil", "--sb-state"])
-    if rc == 0 and out:
-        return "aktiv" if "enabled" in out.lower() else "inaktiv"
-    efivars = Path("/sys/firmware/efi/efivars")
-    if not efivars.exists():
-        return "kein UEFI (Legacy-Boot)"
-    for f in efivars.glob("SecureBoot-*"):
-        try:
-            return "aktiv" if f.read_bytes()[-1] == 1 else "inaktiv"
-        except OSError:
-            break
-    return "unbekannt"
-
-
-def snapper_snapshots():
-    """Liste der Root-Snapshots als Dicts, oder None, wenn snapper fehlt."""
-    rc, out = run(["snapper", "-c", "root", "--jsonout", "list"])
-    if rc != 0 or not out:
-        return None
-    try:
-        data = json.loads(out)
-    except json.JSONDecodeError:
-        return None
-    snaps = data.get("root", data if isinstance(data, list) else [])
-    return [s for s in snaps if s.get("number", 0) != 0]
-
-
-def pending_updates():
-    if not shutil.which("checkupdates"):
-        return None
-    rc, out = run(["checkupdates"])
-    # checkupdates: 0 = Updates vorhanden, 2 = keine Updates
-    if rc == 2:
-        return 0
-    return len(out.splitlines()) if rc == 0 else None
-
-
 def cmd_status(_args):
-    rel = read_kv(RELEASE_FILE)
-    base = read_kv("/etc/os-release")
-    print(accent(f"{rel.get('CIVIOS_NAME', 'CiviOS')} {rel.get('CIVIOS_VERSION', '')}".strip()))
-    print(f"  Basis:        {base.get('PRETTY_NAME', 'unbekannt')}")
-    print(f"  Kernel:       {os.uname().release}")
-    print(f"  Secure Boot:  {secure_boot_state()}")
-    gpus = detect_gpus()
-    print(f"  Grafik:       {', '.join(gpus) if gpus else 'nicht erkannt'}")
-    snaps = snapper_snapshots()
+    name, version = core.civios_version()
+    print(c(f"{name} {version}".strip(), "38;2;242;192;85"))
+    print(f"  Basis:        {core.base_system()}")
+    print(f"  Kernel:       {core.kernel()}")
+    cpu, mem = core.cpu_name(), core.memory_gib()
+    if cpu:
+        print(f"  Prozessor:    {cpu}")
+    if mem:
+        print(f"  Arbeitssp.:   {mem} GiB")
+    g = core.gpus()
+    print(f"  Grafik:       {', '.join(f'{v} ({d})' for v, d in g) if g else 'nicht erkannt'}")
+    print(f"  Secure Boot:  {core.secure_boot()}")
+    snaps = core.snapshots()
     if snaps is None:
         print("  Snapshots:    snapper nicht verfügbar oder keine Berechtigung")
     else:
-        last = snaps[-1].get("date", "?") if snaps else "keiner"
+        last = snaps[-1]["date"] if snaps else "keiner"
         print(f"  Snapshots:    {len(snaps)} vorhanden, letzter: {last}")
-    n = pending_updates()
+    n = core.pending_updates()
     if n is not None:
         print(f"  Updates:      {'System ist aktuell' if n == 0 else f'{n} Pakete können aktualisiert werden'}")
     return 0
 
-
-# ---------- update / snapshots / rollback ----------
 
 def cmd_update(_args):
     if shutil.which("garuda-update"):
@@ -170,7 +82,7 @@ def cmd_update(_args):
 
 
 def cmd_snapshots(_args):
-    snaps = snapper_snapshots()
+    snaps = core.snapshots()
     if snaps is None:
         print("Konnte die Snapshots nicht lesen. Versuche: sudo civios snapshots")
         return 1
@@ -178,154 +90,115 @@ def cmd_snapshots(_args):
         print("Keine Snapshots vorhanden.")
         return 0
     for s in snaps[-15:]:
-        desc = s.get("description") or (s.get("userdata") or {}).get("important", "")
-        print(f"  #{s.get('number'):<5} {s.get('date', '?'):<20} {s.get('type', ''):<7} {desc}")
+        star = " *" if s["important"] else ""
+        print(f"  #{s['number']:<5} {s['date']:<20} {s['type']:<7} {s['description']}{star}")
     if len(snaps) > 15:
         print(f"  ... und {len(snaps) - 15} ältere")
     return 0
 
 
+ROLLBACK_TEXT = (
+    "So holst du einen funktionierenden Zustand zurück:\n"
+    "  1. Neu starten und im Bootmenü 'Garuda Linux snapshots' wählen.\n"
+    "  2. Den Snapshot vor dem fehlerhaften Update starten.\n"
+    "  3. Prüfen, ob alles läuft, dann in Btrfs Assistant den Snapshot\n"
+    "     dauerhaft wiederherstellen ('Restore').\n"
+    "Dein persönlicher Ordner (/home) ist davon nicht betroffen."
+)
+
+
+def open_btrfs_assistant():
+    exe = shutil.which("btrfs-assistant-launcher") or shutil.which("btrfs-assistant")
+    if exe:
+        subprocess.Popen([exe], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return exe is not None
+
+
 def cmd_rollback(_args):
-    print("So holst du einen funktionierenden Zustand zurück:\n"
-          "  1. Neu starten und im Bootmenü 'Garuda Linux snapshots' wählen.\n"
-          "  2. Den Snapshot vor dem fehlerhaften Update starten.\n"
-          "  3. Prüfen, ob alles läuft, dann in Btrfs Assistant den Snapshot\n"
-          "     dauerhaft wiederherstellen ('Restore').\n"
-          "Dein persönlicher Ordner (/home) ist davon nicht betroffen.")
-    if shutil.which("btrfs-assistant-launcher") or shutil.which("btrfs-assistant"):
-        if confirm("Btrfs Assistant jetzt öffnen?"):
-            exe = shutil.which("btrfs-assistant-launcher") or "btrfs-assistant"
-            subprocess.Popen([exe], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print(ROLLBACK_TEXT)
+    if (shutil.which("btrfs-assistant-launcher") or shutil.which("btrfs-assistant")) \
+            and confirm("Btrfs Assistant jetzt öffnen?"):
+        open_btrfs_assistant()
     return 0
 
 
-# ---------- compat ----------
-
-def load_awacy(refresh=False):
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cache = CACHE_DIR / "awacy-games.json"
-    fresh = cache.exists() and time.time() - cache.stat().st_mtime < CACHE_MAX_AGE
-    if refresh or not fresh:
-        try:
-            req = urllib.request.Request(AWACY_URL, headers={"User-Agent": "civios"})
-            with urllib.request.urlopen(req, timeout=15) as r:
-                data = r.read()
-            json.loads(data)
-            cache.write_bytes(data)
-        except Exception as e:  # noqa: BLE001
-            if not cache.exists():
-                print(f"Datenbank nicht erreichbar ({e}) und kein Cache vorhanden.",
-                      file=sys.stderr)
-                return None
-            print("Hinweis: Online-Aktualisierung fehlgeschlagen, nutze Cache.",
-                  file=sys.stderr)
-    return json.loads(cache.read_text())
-
-
 def cmd_compat(args):
-    games = load_awacy(args.refresh)
-    if games is None:
+    db, note = core.load_anticheat_db(args.refresh)
+    if note:
+        print(f"Hinweis: {note}", file=sys.stderr)
+    if db is None:
         return 2
-    q = " ".join(args.game).casefold()
-    hits = [g for g in games if q in g.get("name", "").casefold()]
+    query = " ".join(args.game)
+    hits = core.search_games(db, query, args.limit)
     if not hits:
-        print(f"Kein Eintrag für \"{' '.join(args.game)}\". "
-              "Spiele ohne Anti-Cheat stehen nicht in dieser Datenbank; "
-              "für sie ist ProtonDB die bessere Quelle.")
+        print(f"Kein Eintrag für \"{query}\". Spiele ohne Anti-Cheat stehen nicht in "
+              "dieser Datenbank; für sie ist ProtonDB die bessere Quelle.")
         return 1
-    hits.sort(key=lambda g: (g["name"].casefold() != q, len(g["name"])))
-    for g in hits[: args.limit]:
-        status = g.get("status", "?")
-        label, text = STATUS_DE.get(status, (status, ""))
-        colour = {"Supported": "32", "Running": "33", "Planned": "36"}.get(status, "31")
-        native = " · native Linux-Version" if g.get("native") else ""
-        print(f"{c(g['name'], '1')}  {c(label, colour)}{native}")
-        if text:
-            print(f"  {text}")
-        if g.get("anticheats"):
-            print(f"  Anti-Cheat: {', '.join(g['anticheats'])}")
-        for note in (g.get("notes") or [])[:3]:
-            if isinstance(note, list) and note:
-                print(f"  - {note[0]}" + (f" ({note[1]})" if len(note) > 1 and note[1] else ""))
+    for h in hits:
+        native = " · native Linux-Version" if h["native"] else ""
+        print(f"{c(h['name'], '1')}  {c(h['status'], LEVEL_COLOR[h['level']])}{native}")
+        if h["explanation"]:
+            print(f"  {h['explanation']}")
+        if h["anticheats"]:
+            print(f"  Anti-Cheat: {', '.join(h['anticheats'])}")
+        for n in h["notes"]:
+            print(f"  - {n}")
         print()
     print("Quelle: AreWeAntiCheatYet (Community-Datenbank). Status kann sich "
           "mit jedem Spiel-Update ändern.")
     return 0
 
 
-# ---------- doctor ----------
-
 def cmd_doctor(_args):
-    checks = []
-    rc, out = run(["vulkaninfo", "--summary"])
-    devs = [l.split("=", 1)[1].strip() for l in out.splitlines() if "deviceName" in l]
-    checks.append(("Vulkan", rc == 0 and bool(devs),
-                   ", ".join(devs) if devs else "vulkaninfo fehlt (Paket vulkan-tools) oder kein Vulkan-Gerät"))
-    rc, out = run(["gamemoded", "-s"])
-    checks.append(("GameMode", rc == 0, out or "gamemoded nicht gefunden"))
-    checks.append(("MangoHud", shutil.which("mangohud") is not None, "mangohud im PATH"))
-    checks.append(("Steam", shutil.which("steam") is not None, "steam im PATH"))
-
-    rc, out = run(["pacman-conf", "--repo-list"])
-    repos = out.split()
-    checks.append(("Multilib", "multilib" in repos, "32-Bit-Bibliotheken für Steam und Wine"))
-    checks.append(("Chaotic-AUR", "chaotic-aur" in repos, "Fertige AUR-Pakete"))
-
-    rc, _ = run(["snapper", "-c", "root", "get-config"])
-    checks.append(("Snapshots", rc == 0, "snapper-Konfiguration 'root'" if rc == 0
-                   else "keine snapper-Konfiguration (oder ohne sudo nicht lesbar)"))
-
     ok_all = True
-    for name, ok, detail in checks:
+    for name, ok, detail in core.doctor_checks():
         mark = c("OK   ", "32") if ok else c("FEHLT", "31")
         print(f"  {mark}  {name:<11} {detail}")
         ok_all &= ok
     return 0 if ok_all else 1
 
 
-# ---------- apps ----------
-
-def read_apps():
-    apps = []
-    for line in APPS_LIST.read_text().splitlines():
-        parts = line.split("#", 1)
-        name = parts[0].strip()
-        if name:
-            apps.append((name, parts[1].strip() if len(parts) > 1 else ""))
-    return apps
-
-
 def cmd_apps(args):
-    if not APPS_LIST.exists():
-        print(f"{APPS_LIST} fehlt.", file=sys.stderr)
+    catalog = core.app_catalog()
+    if not catalog:
+        print(f"{core.APPS_LIST} fehlt oder ist leer.", file=sys.stderr)
         return 1
+    wanted = set(args.packages)
+    if wanted:
+        unknown = wanted - {a["name"] for a in catalog}
+        if unknown:
+            print("Nicht in der CiviOS-Liste: " + ", ".join(sorted(unknown)), file=sys.stderr)
+            return 1
+        catalog = [a for a in catalog if a["name"] in wanted]
     todo, skipped = [], []
-    for name, desc in read_apps():
-        if run(["pacman", "-Qq", name])[0] == 0:
+    for app in catalog:
+        if app["installed"]:
             continue
-        if run(["pacman", "-Si", name])[0] != 0:
-            skipped.append(name)
+        if not core.package_available(app["name"]):
+            skipped.append(app["name"])
             continue
-        todo.append((name, desc))
+        todo.append(app)
     if skipped:
         print("Nicht in den Paketquellen gefunden, übersprungen: " + ", ".join(skipped))
     if not todo:
-        print("Alle Anwendungen aus der Liste sind bereits installiert.")
+        print("Alles bereits installiert.")
         return 0
     print("Folgende Anwendungen werden installiert:")
-    for name, desc in todo:
-        print(f"  {name:<28} {desc}")
+    for app in todo:
+        print(f"  {app['name']:<28} {app['description']}")
     if not args.yes and not confirm("Fortfahren?"):
         print("Abgebrochen.")
         return 1
-    return sudo(["pacman", "-S", "--needed"] + [n for n, _ in todo])
+    return sudo(["pacman", "-S", "--needed"] + [a["name"] for a in todo])
 
-
-# ---------- theme ----------
 
 def cmd_theme(args):
-    if args.action != "apply":
-        return 1
+    if args.action in ("light", "dark"):
+        scheme = "CiviOSLight" if args.action == "light" else "CiviOS"
+        if not shutil.which("plasma-apply-colorscheme"):
+            print("plasma-apply-colorscheme nicht gefunden. Läuft KDE Plasma?", file=sys.stderr)
+            return 1
+        return subprocess.call(["plasma-apply-colorscheme", scheme])
     if not shutil.which("plasma-apply-lookandfeel"):
         print("plasma-apply-lookandfeel nicht gefunden. Läuft KDE Plasma?", file=sys.stderr)
         return 1
@@ -354,10 +227,11 @@ def main():
     cp.set_defaults(fn=cmd_compat)
     sub.add_parser("doctor", help="Gaming-Stack prüfen").set_defaults(fn=cmd_doctor)
     a = sub.add_parser("apps", help="Optionale Anwendungen installieren")
+    a.add_argument("packages", nargs="*")
     a.add_argument("-y", "--yes", action="store_true")
     a.set_defaults(fn=cmd_apps)
-    t = sub.add_parser("theme", help="CiviOS-Design anwenden")
-    t.add_argument("action", choices=["apply"])
+    t = sub.add_parser("theme", help="CiviOS-Design anwenden oder hell/dunkel wechseln")
+    t.add_argument("action", choices=["apply", "light", "dark"])
     t.add_argument("-y", "--yes", action="store_true")
     t.set_defaults(fn=cmd_theme)
     args = p.parse_args()
