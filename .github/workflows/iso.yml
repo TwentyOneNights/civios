@@ -41,10 +41,16 @@ jobs:
       - name: Fehlerausschnitt melden
         if: failure()
         run: |
-          # Die letzten Logzeilen als Annotation, damit sie auch über die API lesbar sind.
-          tail -n 80 build.log | sed -e 's/\x1b\[[0-9;]*m//g' -e 's/%/%25/g' > tail.txt
-          msg=$(awk '{printf "%s%%0A", $0}' tail.txt)
-          echo "::error title=ISO-Build fehlgeschlagen::${msg}"
+          # Die letzten wichtigen Logzeilen als Annotationen, damit sie auch über die API
+          # lesbar sind. GitHub kürzt lange Annotationen, deshalb in kleinen Stücken.
+          { grep -vE 'Computing checksums|Creating .(desc|files). db entry|^==> Adding package' build.log \
+              | sed -e 's/\x1b\[[0-9;]*m//g' | tail -n 60
+            echo "--- Speicherplatz ---"; df -h / /mnt | tail -n 2
+          } | cut -c1-200 | sed -e 's/%/%25/g' > tail.txt
+          split -l 15 tail.txt part.
+          for f in part.*; do
+            echo "::error title=ISO-Build ${f#part.}::$(awk '{printf "%s%%0A", $0}' "$f")"
+          done
 
       - name: ISO hochladen
         uses: actions/upload-artifact@v4

@@ -124,6 +124,8 @@ echo "--- Packages-Desktop (Auszug) ---"
 tail -n 25 "$PKG_FILE"
 
 step "5/5 ISO bauen (dauert 20 bis 60 Minuten)"
+echo "Initcpio-Dateien des Build-Rechners:"
+ls /etc/initcpio /etc/initcpio/hooks /etc/initcpio/install 2>&1 | head -n 30 || true
 buildiso -p "$PROFILE"
 
 mkdir -p "$OUT"
