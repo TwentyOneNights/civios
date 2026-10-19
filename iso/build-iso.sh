@@ -140,7 +140,8 @@ buildiso -p "$PROFILE"
 mkdir -p "$OUT"
 ISO=$(find /var/cache/garuda-tools -name '*.iso' -newer "$REPO_INFO" | head -n1)
 [[ -n $ISO ]] || die "Kein ISO gefunden. Logs unter /var/log/garuda-tools prüfen."
-cp -v "$ISO" "$OUT/"
+NAME="civios-$(date +%Y.%m.%d)-x86_64.iso"
+cp -v "$ISO" "$OUT/$NAME"
 ( cd "$OUT" && sha256sum ./*.iso > SHA256SUMS )
 echo
-echo "Fertig: $OUT/$(basename "$ISO")"
+echo "Fertig: $OUT/$NAME"
