@@ -115,6 +115,11 @@ mkdir -p "$DEST/desktop-overlay"
 cp -a "$WORK/overlay/." "$DEST/desktop-overlay/"
 chmod 755 "$DEST"/desktop-overlay/usr/bin/civios*
 
+# Live-Overlay: wird ins Live-System kopiert. Ersetzt unter anderem das
+# Bootmenü-Design des ISO durch das CiviOS-Theme.
+mkdir -p "$DEST/live-overlay"
+cp -a "$WORK/iso/live-overlay/." "$DEST/live-overlay/"
+
 # Live-Sitzung umbenennen. Spätere Zuweisungen in profile.conf gewinnen.
 cat >> "$DEST/profile.conf" <<'EOF'
 

@@ -41,11 +41,24 @@ if [[ -n $DESKTOP_SFS ]]; then
     rm -f "$LIST"
 fi
 
+if grep -rqs "Willkommen bei CiviOS" "$MNT/boot/grub/themes"; then
+    ok "Bootmenü-Design CiviOS"
+else
+    bad "Bootmenü-Design CiviOS"
+fi
+
 if grep -rqs "CiviOS" "$MNT/boot/grub"; then
     ok "Bootmenü nennt CiviOS"
 else
     bad "Bootmenü nennt CiviOS"
 fi
+
+# Information: Installer-Starter im Live-System (für späteres CiviOS-Branding).
+LIVE_SFS=$(find "$MNT" -name livefs.sfs | head -n1)
+for sfs in "$LIVE_SFS" "$DESKTOP_SFS"; do
+    [[ -n $sfs ]] || continue
+    unsquashfs -l "$sfs" | grep -iE "(calamares|install)[^/]*\.desktop$" | sed "s|^|  Info   $(basename "$sfs"): |" || true
+done
 
 echo
 if [[ $FAIL -eq 0 ]]; then

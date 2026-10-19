@@ -1,0 +1,42 @@
+# CiviOS GRUB-Theme für das Live-ISO (ersetzt das Garuda-Live-Theme)
+# Nutzt die eingebaute GRUB-Schrift, damit keine Schriftdateien nötig sind.
+title-text: ""
+desktop-image: "background.png"
+desktop-color: "#141415"
+terminal-box: ""
+
++ label {
+    top = 18%
+    left = 8%
+    width = 40%
+    text = "Willkommen bei CiviOS"
+    color = "#f2c055"
+    align = "left"
+}
+
++ boot_menu {
+    left = 8%
+    top = 26%
+    width = 50%
+    height = 50%
+    item_color = "#c8c6c2"
+    selected_item_color = "#141415"
+    item_height = 34
+    item_padding = 12
+    item_spacing = 6
+    icon_width = 24
+    icon_height = 24
+    item_icon_space = 12
+    selected_item_pixmap_style = "select_*.png"
+    scrollbar = false
+}
+
++ label {
+    top = 88%
+    left = 8%
+    width = 84%
+    align = "left"
+    id = "__timeout__"
+    text = "Start in %d Sekunden"
+    color = "#96948f"
+}
