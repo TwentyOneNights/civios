@@ -1,0 +1,17 @@
+# Optionale Anwendungen für: civios apps
+# Format: <Paketname>  # Beschreibung
+# Pakete, die schon installiert sind oder in keinem Repo existieren, werden übersprungen.
+steam                       # Steam
+lutris                      # Lutris
+heroic-games-launcher-bin   # Heroic (Epic, GOG, Amazon)
+protonplus                  # Proton-GE und Wine-GE verwalten
+gamemode                    # GameMode
+lib32-gamemode              # GameMode für 32-Bit-Spiele
+mangohud                    # Leistungsanzeige im Spiel
+lib32-mangohud              # MangoHud für 32-Bit-Spiele
+visual-studio-code-bin      # Visual Studio Code
+libreoffice-fresh           # Office
+gimp                        # Bildbearbeitung
+kdenlive                    # Videoschnitt
+obs-studio                  # Aufnahme und Streaming
+blender                     # 3D-Modellierung

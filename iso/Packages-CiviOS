@@ -1,0 +1,5 @@
+# Zusätzliche Pakete im CiviOS-ISO (Arch-Paketnamen)
+inter-font
+ttf-jetbrains-mono
+vulkan-tools
+pacman-contrib

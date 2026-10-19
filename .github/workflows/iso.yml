@@ -1,0 +1,47 @@
+name: CiviOS ISO bauen
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_profile:
+        description: "Garuda-Vorlage (z. B. dr460nized-gaming, kde-lite)"
+        required: false
+        default: "dr460nized-gaming"
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  iso:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Speicherplatz freimachen
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune -af
+          df -h / /mnt
+
+      - name: ISO in Arch-Container bauen
+        env:
+          CIVIOS_BASE_PROFILE: ${{ inputs.base_profile || 'dr460nized-gaming' }}
+        run: |
+          sudo mkdir -p /mnt/garuda-lib /mnt/garuda-cache
+          sudo docker run --rm --privileged \
+            -e CIVIOS_BASE_PROFILE \
+            -v "$PWD":/work -w /work \
+            -v /mnt/garuda-lib:/var/lib/garuda-tools \
+            -v /mnt/garuda-cache:/var/cache/garuda-tools \
+            archlinux:latest bash iso/build-iso.sh
+
+      - name: ISO hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: civios-iso
+          path: |
+            out/*.iso
+            out/SHA256SUMS
+          compression-level: 0
+          retention-days: 14

@@ -1,0 +1,18 @@
+# CiviOS-Standardwerte. Gelten für alle Konten, die keine eigenen Werte gesetzt haben.
+[KDE]
+LookAndFeelPackage=org.civios.desktop
+
+[General]
+ColorScheme=CiviOS
+AccentColor=242,192,85
+font=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+menuFont=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+smallestReadableFont=Inter,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+toolBarFont=Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+fixed=JetBrains Mono,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+
+[Icons]
+Theme=breeze-dark
+
+[WM]
+activeFont=Inter,10,-1,5,600,0,0,0,0,0,0,0,0,0,0,1

@@ -1,0 +1,28 @@
+name: Prüfen
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell-Skripte
+        run: |
+          shellcheck -S warning install.sh iso/build-iso.sh overlay/usr/bin/civios-firstrun
+
+      - name: Python
+        run: |
+          python3 -m py_compile overlay/usr/bin/civios
+          NO_COLOR=1 python3 overlay/usr/bin/civios --help
+          NO_COLOR=1 python3 overlay/usr/bin/civios compat "counter-strike 2" --limit 1
+
+      - name: JSON und Theme-Dateien
+        run: |
+          for f in $(find overlay -name '*.json'); do python3 -m json.tool "$f" >/dev/null && echo "ok $f"; done
+          test -f overlay/usr/share/plasma/look-and-feel/org.civios.desktop/contents/defaults
+          test -f overlay/usr/share/plasma/look-and-feel/org.civios.desktop/contents/layouts/org.kde.plasma.desktop-layout.js
+          test -f overlay/usr/share/wallpapers/CiviOS/contents/images/3840x2160.png

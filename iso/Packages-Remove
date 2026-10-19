@@ -1,0 +1,3 @@
+# Pakete aus der Garuda-Vorlage, die CiviOS entfernt, weil sie ein eigenes Design
+# mitbringen. Namen, die in der Vorlage nicht vorkommen, werden ignoriert.
+garuda-dr460nized

@@ -1,0 +1,18 @@
+{
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "CiviOS"
+            }
+        ],
+        "Category": "",
+        "Description": "CiviOS: Tiefschwarz, Anthrazit und warmes Gelb",
+        "Description[de]": "CiviOS: Tiefschwarz, Anthrazit und warmes Gelb",
+        "Id": "org.civios.desktop",
+        "License": "MIT",
+        "Name": "CiviOS",
+        "Version": "0.2.0"
+    },
+    "X-Plasma-APIVersion": "2"
+}

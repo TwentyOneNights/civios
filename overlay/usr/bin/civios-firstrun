@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Wendet das CiviOS-Design einmal pro Benutzerkonto an.
+# Erneut ausführen: civios theme apply
+set -u
+marker="${XDG_CONFIG_HOME:-$HOME/.config}/civios/firstrun-done"
+[[ -e "$marker" ]] && exit 0
+mkdir -p "$(dirname "$marker")"
+
+# Plasma kurz fertig starten lassen, sonst wird das Layout überschrieben.
+sleep 4
+
+if command -v plasma-apply-lookandfeel >/dev/null; then
+    plasma-apply-lookandfeel --apply org.civios.desktop --resetLayout || true
+fi
+if command -v kwriteconfig6 >/dev/null; then
+    kwriteconfig6 --file konsolerc --group "Desktop Entry" --key DefaultProfile CiviOS.profile
+fi
+touch "$marker"

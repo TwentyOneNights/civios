@@ -1,0 +1,12 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "CiviOS"
+            }
+        ],
+        "Id": "CiviOS",
+        "License": "MIT",
+        "Name": "CiviOS"
+    }
+}
