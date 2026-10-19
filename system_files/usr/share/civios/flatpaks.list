@@ -1,0 +1,11 @@
+# Optionale Flatpaks, installiert mit: civios setup-apps
+# Format: <Flathub-ID>  # Beschreibung
+com.heroicgameslauncher.hgl        # Heroic Games Launcher (Epic, GOG, Amazon)
+net.lutris.Lutris                  # Lutris
+com.vysp3r.ProtonPlus              # Proton-GE und andere Kompatibilitätsschichten verwalten
+com.visualstudio.code              # Visual Studio Code
+org.libreoffice.LibreOffice        # Office
+org.gimp.GIMP                      # Bildbearbeitung
+org.kde.kdenlive                   # Videoschnitt
+com.obsproject.Studio              # Aufnahme und Streaming
+org.blender.Blender                # 3D-Modellierung
