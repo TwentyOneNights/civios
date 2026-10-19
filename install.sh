@@ -29,8 +29,13 @@ uninstall() {
             rm -f "$f"
         fi
     done < "$MANIFEST"
+    regrub=0
+    grep -qxF /etc/default/grub "$MANIFEST" && regrub=1
     rm -f "$MANIFEST"
     rm -rf "$BACKUP"
+    if [[ $regrub -eq 1 ]] && command -v grub-mkconfig >/dev/null; then
+        grub-mkconfig -o /boot/grub/grub.cfg
+    fi
     say "Fertig. Design in den Systemeinstellungen wieder umstellen, falls gewünscht."
     exit 0
 }
@@ -72,6 +77,21 @@ if [[ -f /etc/sddm.conf ]] && grep -q '^Current=' /etc/sddm.conf; then
     [[ -f $BACKUP/etc/sddm.conf ]] || { mkdir -p "$BACKUP/etc"; cp -a /etc/sddm.conf "$BACKUP/etc/sddm.conf"; }
     sed -i 's/^Current=.*/Current=breeze/' /etc/sddm.conf
     grep -qxF /etc/sddm.conf "$MANIFEST" || echo /etc/sddm.conf >> "$MANIFEST"
+fi
+
+# Bootmenü-Design (optional, ändert /etc/default/grub)
+if [[ -f /etc/default/grub ]] && command -v grub-mkconfig >/dev/null; then
+    read -rp "Bootmenü (GRUB) ebenfalls im CiviOS-Design? [j/N] " g
+    if [[ $g =~ ^[jJyY] ]]; then
+        [[ -f $BACKUP/etc/default/grub ]] || { mkdir -p "$BACKUP/etc/default"; cp -a /etc/default/grub "$BACKUP/etc/default/grub"; }
+        if grep -q '^#\?GRUB_THEME=' /etc/default/grub; then
+            sed -i 's|^#\?GRUB_THEME=.*|GRUB_THEME="/usr/share/grub/themes/civios/theme.txt"|' /etc/default/grub
+        else
+            echo 'GRUB_THEME="/usr/share/grub/themes/civios/theme.txt"' >> /etc/default/grub
+        fi
+        grep -qxF /etc/default/grub "$MANIFEST" || echo /etc/default/grub >> "$MANIFEST"
+        grub-mkconfig -o /boot/grub/grub.cfg
+    fi
 fi
 
 command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -q -f /usr/share/icons/hicolor || true
